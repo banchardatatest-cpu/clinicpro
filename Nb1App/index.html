@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Clinic Manager Pro V5</title>
+    <title>Clinic Manager Pro V5.1</title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -38,7 +38,7 @@
         .org-logo { max-width: 45px; max-height: 45px; border-radius: 8px; object-fit: contain; background: #fff; padding: 2px; }
         
         .sec { background: var(--surface); border-radius: var(--rs); padding: 18px; margin-bottom: 15px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.02); color: var(--board-text); }
-        .sec-label { font-family: 'Prompt'; font-weight: 700; color: var(--primary); font-size: 15px; margin-bottom: 12px; border-bottom: 2px solid var(--border); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;}
+        .sec-label { font-family: 'Prompt'; font-weight: 700; color: var(--primary); font-size: 15px; margin-bottom: 12px; border-bottom: 2px solid var(--border); padding-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px;}
         
         /* Grid System Responsive */
         .fc { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; background: #fafbfe; margin-bottom: 10px; transition: 0.3s; color: var(--text); }
@@ -81,10 +81,15 @@
         .stat-badge.approved { background:#e8f5e9; color:#2e7d32; }
         .stat-badge.rejected { background:#ffebee; color:#c62828; }
 
-        /* สไตล์ Search Dropdown */
         .search-item { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s; }
         .search-item:hover { background: #f8f9fa; }
         .search-item:last-child { border-bottom: none; }
+
+        /* Accordion Settings Control */
+        .sec-content { display: block; padding-top: 10px; }
+        .set-box { display: flex; flex-direction: column; transition: 0.3s; }
+        .action-icon { cursor: pointer; margin-left: 10px; font-size: 14px; opacity: 0.6; transition: 0.2s; }
+        .action-icon:hover { opacity: 1; transform: scale(1.1); }
     </style>
 </head>
 <body>
@@ -105,7 +110,6 @@
 
 <nav class="nav" id="main-nav" style="display:none">
     <div class="nav-inner">
-        <!-- เมนูเหล่านี้จะถูกซ่อนไว้ถ้าเป็นระดับ Super Owner -->
         <div class="nav-tab active" id="tab-form" onclick="switchPage('form', this)">📝 บันทึก</div>
         <div class="nav-tab" id="tab-appt" onclick="switchPage('appointments', this)">📅 นัดหมาย</div>
         <div class="nav-tab" id="tab-cust" onclick="switchPage('customers', this)">👥 ลูกค้า</div>
@@ -132,7 +136,7 @@
 <div id="main-content" style="display:none; padding: 0 15px; max-width: 800px; margin: 0 auto;">
     <div class="org-banner" id="ui-banner">
         <div style="display:flex; align-items:center; gap:15px;">
-            <img id="ui-logo" class="org-logo" src="" style="display:none;">
+            <img id="ui-logo" class="org-logo" src="" style="display:none !important;">
             <div>
                 <div class="org-name" id="ui-clinic-name" style="font-family: 'Prompt'; font-size: 18px; font-weight: 600;">Clinic System</div>
                 <div style="font-size:12px; opacity:0.8;" id="ui-contact"></div>
@@ -154,9 +158,7 @@
             <div id="f-cust-info">
                 <div class="frow"><div class="fg"><label>ชื่อจริง *</label><input class="fc" id="f-fn"></div><div class="fg"><label>นามสกุล</label><input class="fc" id="f-ln"></div></div>
                 <div class="frow"><div class="fg"><label>เบอร์โทรศัพท์ *</label><input class="fc" id="f-ph" type="tel"></div><div class="fg"><label>เบอร์ติดต่อฉุกเฉิน</label><input class="fc" id="f-em-ph" type="tel"></div></div>
-                
                 <div class="frow"><div class="fg"><label>ID Line</label><input class="fc" id="f-line"></div><div class="fg"><label>Facebook</label><input class="fc" id="f-fb"></div></div>
-
                 <label style="font-size:13px; color:var(--success); font-weight:600; display:flex; gap:8px; align-items:center; margin-bottom:10px;"><input type="checkbox" id="f-pdpa" style="width:18px; height:18px;"> ยินยอม PDPA</label>
 
                 <div class="expand-bar" onclick="toggleExtra()"><div class="expand-icon" id="extra-icon">➕</div><div class="expand-text">ข้อมูลเพิ่มเติมเชิงลึก (อายุ, น้ำหนัก, แพ้ยา...)</div></div>
@@ -282,93 +284,150 @@
         </div>
     </div>
 
-    <!-- ================== PAGE 5: ตั้งค่า ================== -->
+    <!-- ================== PAGE 5: ตั้งค่า (Accordion Layout) ================== -->
     <div id="page-settings" class="page">
-        
-        <!-- ซ่อน UI Setting สำหรับ Super Owner (เน้นคุมพนักงานอย่างเดียว) -->
-        <div id="settings-ops-area">
-            <div class="sec" style="border-left: 4px solid var(--accent);">
-                <div class="sec-label">🎨 ตั้งค่า UI & ค่าธรรมเนียม</div>
-                <div class="frow">
-                    <div class="fg"><label>ชื่อคลินิก</label><input class="fc" id="set-ui-name"></div>
-                    <div class="fg"><label>หัก % บัตรเครดิต</label><input class="fc" id="set-ui-ccfee" type="number"></div>
+        <div id="settings-ops-area" style="display: flex; flex-direction: column;">
+            
+            <div class="sec set-box" style="border-left: 4px solid var(--accent); order: 1;">
+                <div class="sec-label" style="cursor:pointer;" onclick="toggleSettingsSec('sec-ui')">
+                    <span>🎨 ตั้งค่า UI & ค่าธรรมเนียม</span>
+                    <div>
+                        <span class="action-icon" onclick="moveSec(this, -1); event.stopPropagation();">⬆️</span>
+                        <span class="action-icon" onclick="moveSec(this, 1); event.stopPropagation();">⬇️</span>
+                        <span class="action-icon" id="icon-sec-ui">🔽</span>
+                    </div>
                 </div>
-                <div class="frow">
-                    <div class="fg"><label>สีหลักปุ่ม</label><input type="color" class="fc" id="set-ui-primary" style="height:40px; padding:0;"></div>
-                    <div class="fg"><label>สีพื้นหลังเว็บ</label><input type="color" class="fc" id="set-ui-bg" style="height:40px; padding:0;"></div>
-                    <div class="fg"><label>สีฟอนต์กระดาน</label><input type="color" class="fc" id="set-ui-board-text" style="height:40px; padding:0;"></div>
+                <div class="sec-content" id="sec-ui">
+                    <div class="frow">
+                        <div class="fg"><label>ชื่อคลินิก</label><input class="fc" id="set-ui-name"></div>
+                        <div class="fg"><label>หัก % บัตรเครดิต</label><input class="fc" id="set-ui-ccfee" type="number"></div>
+                    </div>
+                    <div class="frow">
+                        <div class="fg"><label>สีหลักปุ่ม</label><input type="color" class="fc" id="set-ui-primary" style="height:40px; padding:0;"></div>
+                        <div class="fg"><label>สีพื้นหลังเว็บ</label><input type="color" class="fc" id="set-ui-bg" style="height:40px; padding:0;"></div>
+                        <div class="fg"><label>สีฟอนต์กระดาน</label><input type="color" class="fc" id="set-ui-board-text" style="height:40px; padding:0;"></div>
+                    </div>
+                    <div class="frow">
+                        <div class="fg"><label>สีแถบเมนู (Nav)</label><input type="color" class="fc" id="set-ui-nav-bg" style="height:40px; padding:0;"></div>
+                        <div class="fg"><label>สีฟอนต์แถบเมนู</label><input type="color" class="fc" id="set-ui-nav-text" style="height:40px; padding:0;"></div>
+                    </div>
+                    <div class="frow">
+                        <div class="fg"><label>ข้อมูลติดต่อ</label><input class="fc" id="set-ui-contact"></div>
+                        <div class="fg"><label>โลโก้</label><input type="file" class="fc" accept="image/*" onchange="uploadLogo(this)"><input type="hidden" id="set-ui-logo"></div>
+                    </div>
+                    <button class="btn-sm" style="background:var(--primary); color:#fff; width:100%; padding:10px; margin-top:10px;" onclick="saveUISettings()">💾 บันทึกการตั้งค่า UI & ค่าธรรมเนียม</button>
                 </div>
-                <div class="frow">
-                    <div class="fg"><label>สีแถบเมนู (Nav)</label><input type="color" class="fc" id="set-ui-nav-bg" style="height:40px; padding:0;"></div>
-                    <div class="fg"><label>สีฟอนต์แถบเมนู</label><input type="color" class="fc" id="set-ui-nav-text" style="height:40px; padding:0;"></div>
-                </div>
-                <div class="frow">
-                    <div class="fg"><label>ข้อมูลติดต่อ</label><input class="fc" id="set-ui-contact"></div>
-                    <div class="fg"><label>โลโก้</label><input type="file" class="fc" accept="image/*" onchange="uploadLogo(this)"><input type="hidden" id="set-ui-logo"></div>
-                </div>
-                <button class="btn-sm" style="background:var(--primary); color:#fff; width:100%; padding:10px; margin-top:10px;" onclick="saveUISettings()">💾 บันทึกการตั้งค่า UI & ค่าธรรมเนียม</button>
             </div>
 
-            <div class="sec" style="border-left: 4px solid var(--primary-dark);">
-                <div class="sec-label">🤖 ตั้งค่า Telegram แจ้งเตือน</div>
-                <div class="frow"><div class="fg"><label>Bot Token</label><input class="fc" id="set-tg-token"></div><div class="fg"><label>Chat ID</label><input class="fc" id="set-tg-chatid"></div></div>
-                
-                <div class="frow" style="margin-bottom:10px;">
-                    <div class="fg tg-box">
-                        <label style="color:var(--primary); font-weight:700; margin-bottom:8px;">📌 เลือกเหตุการณ์ (Events)</label>
-                        <label><input type="checkbox" id="tg-ev-new" checked> ออเดอร์ใหม่</label>
-                        <label><input type="checkbox" id="tg-ev-usage"> บันทึกการเข้าทำ / ตัดคอร์ส</label>
-                    </div>
-                    <div class="fg tg-box">
-                        <label style="color:var(--primary); font-weight:700; margin-bottom:8px;">📝 เลือกข้อมูลที่จะแสดง</label>
-                        <label><input type="checkbox" id="tg-fd-date" checked> วันที่ทำรายการ</label>
-                        <label><input type="checkbox" id="tg-fd-name" checked> ชื่อลูกค้า</label>
-                        <label><input type="checkbox" id="tg-fd-amt" checked> ยอดชำระ</label>
-                        <label><input type="checkbox" id="tg-fd-staff" checked> ชื่อพนักงาน</label>
+            <div class="sec set-box" style="border-left: 4px solid var(--primary-dark); order: 2;">
+                <div class="sec-label" style="cursor:pointer;" onclick="toggleSettingsSec('sec-tg')">
+                    <span>🤖 ตั้งค่า Telegram แจ้งเตือน</span>
+                    <div>
+                        <span class="action-icon" onclick="moveSec(this, -1); event.stopPropagation();">⬆️</span>
+                        <span class="action-icon" onclick="moveSec(this, 1); event.stopPropagation();">⬇️</span>
+                        <span class="action-icon" id="icon-sec-tg">🔽</span>
                     </div>
                 </div>
-                <button class="btn-sm" style="background:var(--primary); color:#fff; width:100%; padding:10px;" onclick="saveUISettings()">💾 บันทึกตั้งค่า Telegram</button>
+                <div class="sec-content" id="sec-tg">
+                    <div class="frow">
+                        <div class="fg">
+                            <label>Bot Token</label>
+                            <div style="display:flex; gap:5px;">
+                                <input class="fc" id="set-tg-token" type="password" readonly style="margin-bottom:0; background:#eee;">
+                                <button class="btn-sm" style="background:#ddd; color:#000;" onclick="enableTgEdit('set-tg-token')">✏️ แก้ไข</button>
+                            </div>
+                        </div>
+                        <div class="fg">
+                            <label>Chat ID</label>
+                            <div style="display:flex; gap:5px;">
+                                <input class="fc" id="set-tg-chatid" type="password" readonly style="margin-bottom:0; background:#eee;">
+                                <button class="btn-sm" style="background:#ddd; color:#000;" onclick="enableTgEdit('set-tg-chatid')">✏️ แก้ไข</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="frow" style="margin-top:10px; margin-bottom:10px;">
+                        <div class="fg tg-box">
+                            <label style="color:var(--primary); font-weight:700; margin-bottom:8px;">📌 เลือกเหตุการณ์ (Events)</label>
+                            <label><input type="checkbox" id="tg-ev-new" checked> ออเดอร์ใหม่</label>
+                            <label><input type="checkbox" id="tg-ev-pay" checked> รายการรับชำระ</label>
+                            <label><input type="checkbox" id="tg-ev-usage"> บันทึกการเข้าทำ / ตัดคอร์ส</label>
+                        </div>
+                        <div class="fg tg-box">
+                            <label style="color:var(--primary); font-weight:700; margin-bottom:8px;">📝 เลือกข้อมูลที่จะแสดง</label>
+                            <label><input type="checkbox" id="tg-fd-date" checked> วันที่ทำรายการ</label>
+                            <label><input type="checkbox" id="tg-fd-name" checked> ชื่อลูกค้า</label>
+                            <label><input type="checkbox" id="tg-fd-items" checked> รายการสินค้า</label>
+                            <label><input type="checkbox" id="tg-fd-price" checked> ราคารวม</label>
+                            <label><input type="checkbox" id="tg-fd-amt" checked> ยอดชำระ</label>
+                            <label><input type="checkbox" id="tg-fd-balance" checked> ยอดค้าง</label>
+                            <label><input type="checkbox" id="tg-fd-staff" checked> ชื่อพนักงาน</label>
+                        </div>
+                    </div>
+                    <div class="frow">
+                        <button class="btn-sm" style="flex:1; background:#e0f2f1; color:#00695c; padding:10px;" onclick="testTelegram()">📩 ทดสอบส่งข้อความ</button>
+                        <button class="btn-sm" style="flex:1; background:var(--primary); color:#fff; padding:10px;" onclick="saveUISettings()">💾 บันทึกตั้งค่า Telegram</button>
+                    </div>
+                </div>
             </div>
 
-            <div class="sec" style="border-left: 4px solid var(--success);">
-                <div class="sec-label">📦 หมวดหมู่ & สินค้า (ผูกข้อมูลอัตโนมัติ)</div>
-                <div style="background:#e8f5e9; padding:10px; border-radius:8px; margin-bottom:10px;">
-                    <div class="frow">
-                        <input type="hidden" id="set-cat-id">
-                        <div class="fg"><label>ชื่อหมวดหมู่หลัก</label><input class="fc" id="set-cat-name" placeholder="ระบุชื่อหมวดหมู่"></div>
-                        <div class="fg" style="flex:0.5"><label>% หักต้นทุน</label><input class="fc" id="set-cat-pct" type="number" placeholder="เช่น 10"></div>
-                        <button class="btn-sm" style="background:var(--success); color:#fff; height:42px; align-self:flex-end;" onclick="addCatalog('category')">💾 บันทึกหมวดหมู่</button>
+            <div class="sec set-box" style="border-left: 4px solid var(--success); order: 3;">
+                <div class="sec-label" style="cursor:pointer;" onclick="toggleSettingsSec('sec-prod')">
+                    <span>📦 หมวดหมู่ & สินค้า</span>
+                    <div>
+                        <span class="action-icon" onclick="moveSec(this, -1); event.stopPropagation();">⬆️</span>
+                        <span class="action-icon" onclick="moveSec(this, 1); event.stopPropagation();">⬇️</span>
+                        <span class="action-icon" id="icon-sec-prod">🔽</span>
                     </div>
                 </div>
-                <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px;">
-                    <div class="frow">
-                        <input type="hidden" id="set-prod-id">
-                        <div class="fg"><label>เลือกหมวดหมู่</label><select class="fc" id="set-prod-cat"></select></div>
-                        <div class="fg"><label style="color:var(--primary);">ชื่อสินค้า</label><input class="fc" id="set-prod-name" placeholder="ระบุชื่อสินค้า/บริการ"></div>
-                        <div class="fg" style="flex:0.5"><label>ชื่อหน่วย</label><input class="fc" id="set-prod-unit" placeholder="เช่น cc, unit"></div>
-                        <div class="fg" style="flex:0.5"><label>ค่ามือ BT</label><input class="fc" id="set-prod-btfee" type="number" placeholder="บาท"></div>
-                        <button class="btn-sm" style="background:var(--primary); color:#fff; height:42px; align-self:flex-end;" onclick="addCatalog('product')">💾 บันทึกสินค้า</button>
+                <div class="sec-content" id="sec-prod">
+                    <div style="background:#e8f5e9; padding:10px; border-radius:8px; margin-bottom:10px;">
+                        <div class="frow">
+                            <input type="hidden" id="set-cat-id">
+                            <div class="fg"><label>ชื่อหมวดหมู่หลัก</label><input class="fc" id="set-cat-name" placeholder="ระบุชื่อหมวดหมู่"></div>
+                            <div class="fg" style="flex:0.5"><label>% หักต้นทุน</label><input class="fc" id="set-cat-pct" type="number" placeholder="เช่น 10"></div>
+                            <button class="btn-sm" style="background:var(--success); color:#fff; height:42px; align-self:flex-end;" onclick="addCatalog('category')">💾 บันทึกหมวดหมู่</button>
+                        </div>
                     </div>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table class="tbl"><thead><tr><th>ชื่อหมวดหมู่ / สินค้า</th><th>รายละเอียด</th><th>จัดการ</th></tr></thead><tbody id="catalog-table"></tbody></table>
+                    <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px;">
+                        <div class="frow">
+                            <input type="hidden" id="set-prod-id">
+                            <div class="fg"><label>เลือกหมวดหมู่</label><select class="fc" id="set-prod-cat"></select></div>
+                            <div class="fg"><label style="color:var(--primary);">ชื่อสินค้า</label><input class="fc" id="set-prod-name" placeholder="ระบุชื่อสินค้า/บริการ"></div>
+                            <div class="fg" style="flex:0.5"><label>ชื่อหน่วย</label><input class="fc" id="set-prod-unit" placeholder="เช่น cc, unit"></div>
+                            <div class="fg" style="flex:0.5"><label>ค่ามือ BT</label><input class="fc" id="set-prod-btfee" type="number" placeholder="บาท"></div>
+                            <button class="btn-sm" style="background:var(--primary); color:#fff; height:42px; align-self:flex-end;" onclick="addCatalog('product')">💾 บันทึกสินค้า</button>
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="tbl"><thead><tr><th>ชื่อหมวดหมู่ / สินค้า</th><th>รายละเอียด</th><th>จัดการ</th></tr></thead><tbody id="catalog-table"></tbody></table>
+                    </div>
                 </div>
             </div>
             
-            <div class="sec" style="border-left: 4px solid var(--warning);">
-                <div class="sec-label">📈 เกณฑ์คอมมิชชันเซลล์</div>
-                <div class="frow">
-                    <input type="hidden" id="set-tier-id">
-                    <div class="fg"><label>ยอดขายเริ่ม (บาท)</label><input class="fc" id="set-tier-min" type="number" placeholder="เช่น 0"></div>
-                    <div class="fg"><label>ถึงยอดสูงสุด (เว้นว่าง=ไม่จำกัด)</label><input class="fc" id="set-tier-max" type="number" placeholder="เช่น 50000"></div>
-                    <div class="fg"><label>ได้คอม (%)</label><input class="fc" id="set-tier-pct" type="number" placeholder="เช่น 3"></div>
-                    <button class="btn-sm" style="background:var(--warning); height:42px; align-self:flex-end;" onclick="addCatalog('tier')">💾 บันทึกเกณฑ์</button>
+            <div class="sec set-box" style="border-left: 4px solid var(--warning); order: 4;">
+                <div class="sec-label" style="cursor:pointer;" onclick="toggleSettingsSec('sec-tier')">
+                    <span>📈 เกณฑ์คอมมิชชันเซลล์</span>
+                    <div>
+                        <span class="action-icon" onclick="moveSec(this, -1); event.stopPropagation();">⬆️</span>
+                        <span class="action-icon" onclick="moveSec(this, 1); event.stopPropagation();">⬇️</span>
+                        <span class="action-icon" id="icon-sec-tier">🔽</span>
+                    </div>
                 </div>
-                <div style="overflow-x:auto; margin-top:10px;"><table class="tbl"><thead><tr><th>ยอดเริ่ม</th><th>ยอดสุด</th><th>% คอม</th><th>จัดการ</th></tr></thead><tbody id="tier-table"></tbody></table></div>
+                <div class="sec-content" id="sec-tier">
+                    <div class="frow">
+                        <input type="hidden" id="set-tier-id">
+                        <div class="fg"><label>ยอดขายเริ่ม (บาท)</label><input class="fc" id="set-tier-min" type="number" placeholder="เช่น 0"></div>
+                        <div class="fg"><label>ถึงยอดสูงสุด (เว้นว่าง=ไม่จำกัด)</label><input class="fc" id="set-tier-max" type="number" placeholder="เช่น 50000"></div>
+                        <div class="fg"><label>ได้คอม (%)</label><input class="fc" id="set-tier-pct" type="number" placeholder="เช่น 3"></div>
+                        <button class="btn-sm" style="background:var(--warning); height:42px; align-self:flex-end;" onclick="addCatalog('tier')">💾 บันทึกเกณฑ์</button>
+                    </div>
+                    <div style="overflow-x:auto; margin-top:10px;"><table class="tbl"><thead><tr><th>ยอดเริ่ม</th><th>ยอดสุด</th><th>% คอม</th><th>จัดการ</th></tr></thead><tbody id="tier-table"></tbody></table></div>
+                </div>
             </div>
-        </div> <!-- End of Settings Ops Area -->
+        </div>
 
-        <div class="sec" style="border-left: 4px solid var(--text);">
+        <div class="sec" style="border-left: 4px solid var(--text); margin-top:15px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><div class="sec-label" style="margin:0;">👥 พนักงานและสิทธิ์การใช้งาน</div><button class="btn-sm" style="background:var(--primary); color:#fff;" onclick="openStaffModal()">+ เพิ่มพนักงานใหม่</button></div>
             <table class="tbl">
                 <thead><tr><th>ชื่อ</th><th style="text-align:right;">จัดการ</th></tr></thead>
@@ -414,19 +473,10 @@
     window.addEventListener('online', updateStatus); window.addEventListener('offline', updateStatus);
     function updateStatus() { const d = document.getElementById('net-status'); const t = document.getElementById('net-text'); if(navigator.onLine){d.classList.remove('offline'); t.textContent='Online';} else {d.classList.add('offline'); t.textContent='Offline'; fxErr.play();} }
 
-    // แจ้งเตือนก่อนออกหน้าเว็บหากพิมพ์ข้อมูลค้างไว้
-    window.addEventListener('beforeunload', function (e) {
-        if (isFormDirty) { e.preventDefault(); e.returnValue = 'คุณมีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?'; }
-    });
+    window.addEventListener('beforeunload', function (e) { if (isFormDirty) { e.preventDefault(); e.returnValue = 'คุณมีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?'; } });
+    document.getElementById('page-form').addEventListener('input', triggerDraftSave); document.getElementById('page-form').addEventListener('change', triggerDraftSave);
 
-    // ดักจับการแก้ไขฟอร์มเพื่อ Auto-Save (Draft)
-    document.getElementById('page-form').addEventListener('input', triggerDraftSave);
-    document.getElementById('page-form').addEventListener('change', triggerDraftSave);
-
-    function triggerDraftSave(e) {
-        if (e.target.id === 'f-auto-search') return;
-        isFormDirty = true; clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(saveDraftToLocal, 1000);
-    }
+    function triggerDraftSave(e) { if (e.target.id === 'f-auto-search') return; isFormDirty = true; clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(saveDraftToLocal, 1000); }
 
     function saveDraftToLocal() {
         if(!currentUser) return;
@@ -490,7 +540,6 @@
         });
     };
 
-    // ฝัง User Context ไปกับทุก API Request
     async function apiCall(action, payload) {
         if(!navigator.onLine) { showToast('ไม่มีอินเทอร์เน็ต', true); fxErr.play(); return {success:false}; }
         if(currentUser) { payload.currentUserId = currentUser.id; payload.currentUserRole = currentUser.role; }
@@ -519,20 +568,19 @@
         
         const role = currentUser.role;
         
-        // Super Owner Logic (แยกการทำงานให้เห็นเฉพาะตั้งค่า)
+        // Super Owner Logic
         if (role === 'Super Owner') {
             document.getElementById('tab-form').style.display = 'none';
             document.getElementById('tab-appt').style.display = 'none';
             document.getElementById('tab-cust').style.display = 'none';
             document.getElementById('tab-summary').style.display = 'none';
             document.getElementById('tab-settings').style.display = 'block';
-            document.getElementById('settings-ops-area').style.display = 'none'; // ซ่อนส่วนที่ไม่เกี่ยวกับผู้ใช้
+            document.getElementById('settings-ops-area').style.display = 'none'; 
             switchPage('settings', document.getElementById('tab-settings'));
             loadAllStaff();
-            return; // ออกจากฟังก์ชันสำหรับ Super Owner
+            return; 
         }
 
-        // Logic ทั่วไป
         if (!['Owner', 'Admin'].includes(role)) { document.getElementById('tab-settings').style.display = 'none'; } 
         else { document.getElementById('tab-settings').style.display = 'block'; loadAllStaff(); }
 
@@ -578,13 +626,59 @@
         if(s.ui_nav_bg) { root.style.setProperty('--nav-bg', s.ui_nav_bg); document.getElementById('set-ui-nav-bg').value = s.ui_nav_bg; }
         if(s.ui_nav_text) { root.style.setProperty('--nav-text', s.ui_nav_text); document.getElementById('set-ui-nav-text').value = s.ui_nav_text; }
         if(s.ui_board_text) { root.style.setProperty('--board-text', s.ui_board_text); document.getElementById('set-ui-board-text').value = s.ui_board_text; }
+        
         if(s.clinic_name) { document.getElementById('ui-clinic-name').textContent = s.clinic_name; document.getElementById('login-title').textContent = s.clinic_name; document.getElementById('set-ui-name').value = s.clinic_name;}
         if(s.contact_info) { document.getElementById('ui-contact').textContent = s.contact_info; document.getElementById('set-ui-contact').value = s.contact_info;}
-        if(s.logo_url) { document.querySelectorAll('.org-logo, #login-logo').forEach(l => { l.src = s.logo_url; l.style.display = 'block'; }); document.getElementById('set-ui-logo').value = s.logo_url; }
+        
+        // Fix Logo Display
+        if(s.logo_url) { 
+            const logos = document.querySelectorAll('.org-logo, #login-logo');
+            logos.forEach(l => { 
+                l.src = s.logo_url; 
+                l.style.setProperty('display', 'block', 'important'); 
+            }); 
+            document.getElementById('set-ui-logo').value = s.logo_url; 
+        }
+        
         if(s.cc_fee_percent) document.getElementById('set-ui-ccfee').value = s.cc_fee_percent;
         if(s.tg_token) document.getElementById('set-tg-token').value = s.tg_token;
         if(s.tg_chat_id) document.getElementById('set-tg-chatid').value = s.tg_chat_id;
-        if(s.tg_config) { let tc = typeof s.tg_config === 'string' ? JSON.parse(s.tg_config) : s.tg_config; if(tc.events) { document.getElementById('tg-ev-new').checked = tc.events.new_order; document.getElementById('tg-ev-usage').checked = tc.events.usage; } if(tc.fields) { document.getElementById('tg-fd-date').checked = tc.fields.date; document.getElementById('tg-fd-name').checked = tc.fields.name; document.getElementById('tg-fd-amt').checked = tc.fields.amount; document.getElementById('tg-fd-staff').checked = tc.fields.staff; } }
+        
+        if(s.tg_config) { 
+            let tc = typeof s.tg_config === 'string' ? JSON.parse(s.tg_config) : s.tg_config; 
+            tc.events = tc.events || {}; tc.fields = tc.fields || {};
+            if(tc.events) { document.getElementById('tg-ev-new').checked = !!tc.events.new_order; document.getElementById('tg-ev-usage').checked = !!tc.events.usage; document.getElementById('tg-ev-pay').checked = !!tc.events.payment; } 
+            if(tc.fields) { document.getElementById('tg-fd-date').checked = !!tc.fields.date; document.getElementById('tg-fd-name').checked = !!tc.fields.name; document.getElementById('tg-fd-amt').checked = !!tc.fields.amount; document.getElementById('tg-fd-staff').checked = !!tc.fields.staff; document.getElementById('tg-fd-items').checked = !!tc.fields.items; document.getElementById('tg-fd-price').checked = !!tc.fields.price; document.getElementById('tg-fd-balance').checked = !!tc.fields.balance; } 
+        }
+    }
+
+    // ====== SETTINGS UI (Accordion & Move) ======
+    function toggleSettingsSec(id) {
+        const content = document.getElementById(id);
+        const icon = document.getElementById('icon-' + id);
+        if (content.style.display === 'none') { content.style.display = 'block'; icon.textContent = '🔽'; } 
+        else { content.style.display = 'none'; icon.textContent = '◀️'; }
+    }
+
+    function moveSec(btn, direction) {
+        const sec = btn.closest('.set-box');
+        const parent = sec.parentNode;
+        if (direction === -1 && sec.previousElementSibling) { parent.insertBefore(sec, sec.previousElementSibling); } 
+        else if (direction === 1 && sec.nextElementSibling) { parent.insertBefore(sec.nextElementSibling, sec); }
+    }
+
+    function enableTgEdit(id) {
+        const el = document.getElementById(id);
+        el.type = 'text'; el.readOnly = false; el.style.background = '#fff'; el.focus();
+    }
+
+    async function testTelegram() {
+        const token = document.getElementById('set-tg-token').value;
+        const chatId = document.getElementById('set-tg-chatid').value;
+        if(!token || !chatId) return showToast('กรุณากรอก Token และ Chat ID ก่อนทดสอบ', true);
+        const res = await apiCall('test_telegram', { token, chatId });
+        if(res.success) showToast('ส่งข้อความทดสอบสำเร็จ');
+        else showToast('การทดสอบล้มเหลว', true);
     }
 
     function switchApprovalTab(tab) {
@@ -636,15 +730,17 @@
     }
 
     function renderTierTable() {
-        let html = ''; catalog.tiers.forEach(t => { html += `<tr><td>${parseFloat(t.min_sales).toLocaleString()}</td><td>${t.max_sales ? parseFloat(t.max_sales).toLocaleString() : 'ไม่จำกัด'}</td><td>${parseFloat(t.commission_percent)}%</td><td><button class="btn-sm" style="background:var(--warning)" onclick="editTier(${t.id}, ${t.min_sales}, ${t.max_sales||''}, ${t.commission_percent})">แก้ไข</button> <button class="btn-sm" style="background:var(--danger); color:#fff;" onclick="deleteCatalog('tier', ${t.id})">ลบ</button></td></tr>`; });
+        let html = ''; catalog.tiers.forEach(t => { html += `<tr><td>${parseFloat(t.min_sales).toLocaleString()}</td><td>${t.max_sales ? parseFloat(t.max_sales).toLocaleString() : 'ไม่จำกัด'}</td><td>${parseFloat(t.commission_percent)}%</td><td><button class="btn-sm" style="background:var(--warning)" onclick="editTier(${t.id}, ${t.min_sales}, ${t.max_sales ? t.max_sales : 'null'}, ${t.commission_percent})">แก้ไข</button> <button class="btn-sm" style="background:var(--danger); color:#fff;" onclick="deleteCatalog('tier', ${t.id})">ลบ</button></td></tr>`; });
         const tbl = document.getElementById('tier-table'); if(tbl) tbl.innerHTML = html;
     }
 
     function renderSelects() {
-        document.getElementById('f-sale').innerHTML = '<option value="">-เลือกเซลล์-</option>' + staffList.filter(s=>['Sales','Manager','Owner','Admin', 'Front'].includes(s.role)).map(s=>`<option value="${s.id}">${s.display_name}</option>`).join('');
+        // ห้าม Owner และ Super Owner ถูกเลือกในตัวเลือกเซลล์
+        document.getElementById('f-sale').innerHTML = '<option value="">-เลือกเซลล์-</option>' + staffList.filter(s=>!['Owner', 'Super Owner'].includes(s.role)).map(s=>`<option value="${s.id}">${s.display_name}</option>`).join('');
         document.getElementById('f-dr').innerHTML = '<option value="">-แพทย์-</option>' + staffList.filter(s=>s.role==='Dr').map(s=>`<option value="${s.id}">${s.display_name}</option>`).join('');
         document.getElementById('f-bt').innerHTML = '<option value="">-BT-</option>' + staffList.filter(s=>s.role==='BT').map(s=>`<option value="${s.id}">${s.display_name}</option>`).join('');
-        document.getElementById('apt-dr').innerHTML = document.getElementById('f-dr').innerHTML; document.getElementById('apt-bt').innerHTML = document.getElementById('f-bt').innerHTML;
+        document.getElementById('apt-dr').innerHTML = document.getElementById('f-dr').innerHTML;
+        document.getElementById('apt-bt').innerHTML = document.getElementById('f-bt').innerHTML;
     }
 
     function toggleExtra() { const b = document.getElementById('extra-body'); const i = document.getElementById('extra-icon'); const isShow = b.style.display === 'block'; b.style.display = isShow ? 'none' : 'block'; i.textContent = isShow ? '➕' : '➖'; }
@@ -745,9 +841,9 @@
         const p = {
             action: 'save_settings', clinic_name: document.getElementById('set-ui-name').value, ui_primary_color: document.getElementById('set-ui-primary').value, ui_bg_color: document.getElementById('set-ui-bg').value, ui_nav_bg: document.getElementById('set-ui-nav-bg').value, ui_nav_text: document.getElementById('set-ui-nav-text').value, ui_board_text: document.getElementById('set-ui-board-text').value, contact_info: document.getElementById('set-ui-contact').value, logo_url: document.getElementById('set-ui-logo').value, cc_fee_percent: document.getElementById('set-ui-ccfee').value,
             tg_token: document.getElementById('set-tg-token').value, tg_chat_id: document.getElementById('set-tg-chatid').value,
-            tg_config: { events: { new_order: document.getElementById('tg-ev-new').checked, usage: document.getElementById('tg-ev-usage').checked }, fields: { date: document.getElementById('tg-fd-date').checked, name: document.getElementById('tg-fd-name').checked, amount: document.getElementById('tg-fd-amt').checked, staff: document.getElementById('tg-fd-staff').checked } }
+            tg_config: { events: { new_order: document.getElementById('tg-ev-new').checked, usage: document.getElementById('tg-ev-usage').checked, payment: document.getElementById('tg-ev-pay').checked }, fields: { date: document.getElementById('tg-fd-date').checked, name: document.getElementById('tg-fd-name').checked, amount: document.getElementById('tg-fd-amt').checked, staff: document.getElementById('tg-fd-staff').checked, items: document.getElementById('tg-fd-items').checked, price: document.getElementById('tg-fd-price').checked, balance: document.getElementById('tg-fd-balance').checked } }
         };
-        const res = await apiCall('save_settings', p); if(res.success) { showToast('บันทึกการตั้งค่าแล้ว'); applyTheme(p); }
+        const res = await apiCall('save_settings', p); if(res.success) { showToast('บันทึกการตั้งค่าแล้ว'); applyTheme(p); document.getElementById('set-tg-token').type = 'password'; document.getElementById('set-tg-chatid').type = 'password'; }
     }
 
     async function addCatalog(type) {
@@ -761,7 +857,7 @@
 
     function editCategory(id, name, pct) { document.getElementById('set-cat-id').value = id; document.getElementById('set-cat-name').value = name; document.getElementById('set-cat-pct').value = pct; document.getElementById('set-cat-name').focus(); window.scrollTo(0, document.getElementById('set-cat-name').offsetTop); }
     function editProduct(id, catName, name, unit, bt) { document.getElementById('set-prod-id').value = id; let opts = document.getElementById('set-prod-cat').options; for(let i=0; i<opts.length; i++) { if(opts[i].text.includes(catName)) { document.getElementById('set-prod-cat').selectedIndex = i; break; } } document.getElementById('set-prod-name').value = name; document.getElementById('set-prod-unit').value = unit; document.getElementById('set-prod-btfee').value = bt; document.getElementById('set-prod-name').focus(); window.scrollTo(0, document.getElementById('set-prod-name').offsetTop); }
-    function editTier(id, min, max, pct) { document.getElementById('set-tier-id').value = id; document.getElementById('set-tier-min').value = min; document.getElementById('set-tier-max').value = max; document.getElementById('set-tier-pct').value = pct; document.getElementById('set-tier-pct').focus(); window.scrollTo(0, document.getElementById('set-tier-pct').offsetTop); }
+    function editTier(id, min, max, pct) { document.getElementById('set-tier-id').value = id; document.getElementById('set-tier-min').value = min; document.getElementById('set-tier-max').value = max !== null ? max : ''; document.getElementById('set-tier-pct').value = pct; document.getElementById('set-tier-pct').focus(); window.scrollTo(0, document.getElementById('set-tier-pct').offsetTop); }
     async function deleteCatalog(type, id) { if(confirm('ยืนยันลบข้อมูลนี้? (อาจมีผลกับประวัติเก่า)')) { const res = await apiCall('manage_catalog', { type, subAction: 'delete', id }); if(res.success) { showToast('ลบข้อมูลแล้ว'); await reloadCatalogData(); } } }
     
     // ====== STAFF MANAGEMENT & SECURITY ======
@@ -771,7 +867,6 @@
             staffList = res.staff; 
             document.getElementById('staff-table').innerHTML = res.staff.map(u => {
                 let btnHtml = '';
-                // ล็อกปุ่มถ้าพยายามแก้ไข Owner และตัวเองไม่ใช่ Super Owner
                 if ((u.role === 'Owner' || u.role === 'Super Owner') && currentUser.role !== 'Super Owner') {
                     btnHtml = `<span style="color:var(--text2); font-size:11px;">🔒 ล็อกสิทธิ์ระบบ</span>`;
                 } else {
@@ -795,7 +890,7 @@
         const p = { subAction: document.getElementById('stf-id').value?'edit':'add', id: document.getElementById('stf-id').value, username: document.getElementById('stf-user').value, pin: document.getElementById('stf-pin').value, name: document.getElementById('stf-name').value, role: document.getElementById('stf-role').value }; 
         const res = await apiCall('manage_staff', p); 
         if(res.success) { showToast('บันทึกพนักงานสำเร็จ'); document.getElementById('modal-staff').style.display='none'; loadAllStaff(); } 
-        else { showToast(res.message, true); fxErr.play(); } // แสดงข้อความ error กรณีละเมิดสิทธิ์
+        else { showToast(res.message, true); fxErr.play(); } 
     }
     
     async function delStaff(id) { if(confirm('ยืนยันลบพนักงาน?')) { const res = await apiCall('manage_staff', { subAction: 'delete', id }); if(res.success) { loadAllStaff(); } else { showToast(res.message, true); fxErr.play(); } } }
