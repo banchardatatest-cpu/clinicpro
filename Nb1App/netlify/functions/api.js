@@ -12,13 +12,10 @@ exports.handler = async (event) => {
         const body = JSON.parse(event.body);
         const { action, payload } = body;
 
-        // --- Helper: ฟังก์ชันสำหรับบันทึก Log การทำงาน ---
         const logAudit = async (actionName, tableName, recordId, details) => {
             if (!payload.currentUserId) return;
-            try {
-                await sql`INSERT INTO audit_logs (user_id, action, table_name, record_id, new_data) 
-                          VALUES (${payload.currentUserId}, ${actionName}, ${tableName}, ${recordId || null}, ${JSON.stringify(details)})`;
-            } catch(e) { console.error('Audit Log Error:', e); }
+            try { await sql`INSERT INTO audit_logs (user_id, action, table_name, record_id, new_data) VALUES (${payload.currentUserId}, ${actionName}, ${tableName}, ${recordId || null}, ${JSON.stringify(details)})`; } 
+            catch(e) { console.error('Audit Log Error:', e); }
         };
 
         // ==========================================
@@ -30,7 +27,13 @@ exports.handler = async (event) => {
             return { statusCode: 401, body: JSON.stringify({ success: false, message: 'ข้อมูลไม่ถูกต้อง' }) };
         }
         if (action === 'get_staff') {
-            const staff = await sql`SELECT id, username, pin_code, display_name, role, avatar_url FROM users ORDER BY role, display_name`;
+            // ซ่อน Super Owner ออกจากระบบ ยกเว้นคนที่ล็อกอินเป็น Super Owner
+            let staff;
+            if (payload.currentUserRole === 'Super Owner') {
+                staff = await sql`SELECT id, username, pin_code, display_name, role, avatar_url FROM users ORDER BY role, display_name`;
+            } else {
+                staff = await sql`SELECT id, username, pin_code, display_name, role, avatar_url FROM users WHERE role != 'Super Owner' ORDER BY role, display_name`;
+            }
             return { statusCode: 200, body: JSON.stringify({ success: true, staff }) };
         }
         if (action === 'update_own_avatar') {
@@ -80,17 +83,9 @@ exports.handler = async (event) => {
             const existing = await sql`SELECT id FROM customers WHERE phone = ${payload.phone}`;
             if (existing.length > 0) {
                 customerId = existing[0].id;
-                await sql`UPDATE customers SET 
-                    first_name=${payload.firstName}, last_name=${payload.lastName}, emergency_phone=${payload.emergencyPhone||null},
-                    line_id=${payload.lineId||null}, facebook=${payload.facebook||null},
-                    age=${payload.age||null}, weight=${payload.weight||null}, height=${payload.height||null}, 
-                    disease=${payload.disease||null}, drug_allergy=${payload.drugAllergy||null}, 
-                    occupation=${payload.occupation||null}, workplace=${payload.workplace||null}, address=${payload.address||null},
-                    pdpa_consent=${payload.pdpa} WHERE id=${customerId}`;
+                await sql`UPDATE customers SET first_name=${payload.firstName}, last_name=${payload.lastName}, emergency_phone=${payload.emergencyPhone||null}, line_id=${payload.lineId||null}, facebook=${payload.facebook||null}, age=${payload.age||null}, weight=${payload.weight||null}, height=${payload.height||null}, disease=${payload.disease||null}, drug_allergy=${payload.drugAllergy||null}, occupation=${payload.occupation||null}, workplace=${payload.workplace||null}, address=${payload.address||null}, pdpa_consent=${payload.pdpa} WHERE id=${customerId}`;
             } else {
-                const newC = await sql`INSERT INTO customers 
-                    (first_name, last_name, phone, emergency_phone, line_id, facebook, age, weight, height, disease, drug_allergy, occupation, workplace, address, pdpa_consent) 
-                    VALUES (${payload.firstName}, ${payload.lastName}, ${payload.phone}, ${payload.emergencyPhone||null}, ${payload.lineId||null}, ${payload.facebook||null}, ${payload.age||null}, ${payload.weight||null}, ${payload.height||null}, ${payload.disease||null}, ${payload.drugAllergy||null}, ${payload.occupation||null}, ${payload.workplace||null}, ${payload.address||null}, ${payload.pdpa}) RETURNING id`;
+                const newC = await sql`INSERT INTO customers (first_name, last_name, phone, emergency_phone, line_id, facebook, age, weight, height, disease, drug_allergy, occupation, workplace, address, pdpa_consent) VALUES (${payload.firstName}, ${payload.lastName}, ${payload.phone}, ${payload.emergencyPhone||null}, ${payload.lineId||null}, ${payload.facebook||null}, ${payload.age||null}, ${payload.weight||null}, ${payload.height||null}, ${payload.disease||null}, ${payload.drugAllergy||null}, ${payload.occupation||null}, ${payload.workplace||null}, ${payload.address||null}, ${payload.pdpa}) RETURNING id`;
                 customerId = newC[0].id;
             }
 
@@ -113,19 +108,41 @@ exports.handler = async (event) => {
                 await sql`INSERT INTO service_usage (order_id, customer_id, usage_date, details, dr_id, bt_id, created_by) VALUES (${targetOrderId}, ${customerId}, CURRENT_DATE, ${payload.usageDetails}, ${payload.drId||null}, ${payload.btId||null}, ${payload.currentUserId})`;
             }
 
-            // บันทึก Log การสั่งซื้อ
             await logAudit('SAVE_ORDER', 'orders', targetOrderId, { totalPrice: payload.totalPrice, paymentAmount: payload.paymentAmount });
 
+            // Telegram Alert Logic
             try {
                 const settings = await sql`SELECT * FROM system_settings LIMIT 1`;
                 if (settings.length > 0 && settings[0].tg_token && settings[0].tg_config) {
                     const tgConfig = typeof settings[0].tg_config === 'string' ? JSON.parse(settings[0].tg_config) : settings[0].tg_config;
-                    if (isNewOrder && tgConfig.events.new_order) {
+                    let itemsTxt = '';
+                    if (payload.items && payload.items.length > 0) { payload.items.forEach(i => { itemsTxt += `- ${i.name} ${i.qty||1} ${i.unit||''} = ${(parseFloat(i.total)||0).toLocaleString()}฿\n`; }); }
+                    
+                    const balance = parseFloat(payload.totalPrice) - parseFloat(payload.paymentAmount);
+
+                    if (isNewOrder && tgConfig.events?.new_order) {
                         let txt = `🚨 <b>แจ้งทำรายการออเดอร์ใหม่ (รออนุมัติ)</b>\n`;
-                        if (tgConfig.fields.date) txt += `📅 วันที่: ${new Date().toLocaleDateString('th-TH')}\n`;
-                        if (tgConfig.fields.name) txt += `👤 ลูกค้า: ${payload.firstName} ${payload.lastName}\n`;
-                        if (tgConfig.fields.amount) txt += `💰 ยอดชำระเข้า: ${parseFloat(payload.paymentAmount).toLocaleString()} ฿\n`;
-                        if (tgConfig.fields.staff) txt += `👩‍💼 พนักงาน: ${payload.saleStaffName}\n`;
+                        if (tgConfig.fields?.date) txt += `📅 วันที่: ${new Date().toLocaleDateString('th-TH')}\n`;
+                        if (tgConfig.fields?.name) txt += `👤 ลูกค้า: ${payload.firstName} ${payload.lastName}\n`;
+                        if (tgConfig.fields?.items && itemsTxt) txt += `📦 รายการสินค้า:\n${itemsTxt}`;
+                        if (tgConfig.fields?.price) txt += `🔖 ราคารวม: ${parseFloat(payload.totalPrice).toLocaleString()} ฿\n`;
+                        if (tgConfig.fields?.amount) txt += `💰 ยอดชำระเข้า: ${parseFloat(payload.paymentAmount).toLocaleString()} ฿\n`;
+                        if (tgConfig.fields?.balance) txt += `📉 ยอดค้าง: ${balance > 0 ? balance.toLocaleString() : 0} ฿\n`;
+                        if (tgConfig.fields?.staff) txt += `👩‍💼 พนักงาน: ${payload.saleStaffName}\n`;
+                        await fetch(`https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
+                    }
+                    
+                    if (!isNewOrder && payload.paymentAmount > 0 && tgConfig.events?.payment) {
+                        let txt = `💸 <b>แจ้งรับชำระเงิน (บิลเก่า/รออนุมัติ)</b>\n`;
+                        if (tgConfig.fields?.date) txt += `📅 วันที่: ${new Date().toLocaleDateString('th-TH')}\n`;
+                        if (tgConfig.fields?.name) txt += `👤 ลูกค้า: ${payload.firstName} ${payload.lastName}\n`;
+                        if (tgConfig.fields?.amount) txt += `💰 ยอดชำระเข้า: ${parseFloat(payload.paymentAmount).toLocaleString()} ฿\n`;
+                        if (tgConfig.fields?.staff) txt += `👩‍💼 พนักงานรับชำระ: ${payload.saleStaffName}\n`;
+                        await fetch(`https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
+                    }
+
+                    if (payload.usageDetails && !isNewOrder && tgConfig.events?.usage) {
+                        let txt = `💆‍♀️ <b>บันทึกการเข้าใช้บริการ</b>\n👤 ลูกค้า: ${payload.firstName}\n📝 ทำรายการ: ${payload.usageDetails}`;
                         await fetch(`https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
                     }
                 }
@@ -150,7 +167,6 @@ exports.handler = async (event) => {
         if (action === 'set_approval') {
             await sql`UPDATE payments SET approval_status = ${payload.status}, approval_updated_at = CURRENT_TIMESTAMP WHERE id = ${payload.paymentId}`;
             if(payload.status === 'Approved') await sql`UPDATE orders SET approval_status = 'Approved' WHERE id = ${payload.orderId}`;
-            
             await logAudit('FINANCE_APPROVAL', 'payments', payload.paymentId, { status: payload.status });
             return { statusCode: 200, body: JSON.stringify({ success: true }) };
         }
@@ -267,7 +283,7 @@ exports.handler = async (event) => {
         }
 
         // ==========================================
-        // 7. UTILS, SETTINGS & SECURITY ROLES
+        // 7. UTILS & SETTINGS
         // ==========================================
         if (action === 'get_settings') {
             const settings = await sql`SELECT * FROM system_settings ORDER BY id DESC LIMIT 1`;
@@ -285,15 +301,21 @@ exports.handler = async (event) => {
             return { statusCode: 200, body: JSON.stringify({ success: true }) };
         }
         
+        // ทดสอบส่ง Telegram
+        if (action === 'test_telegram') {
+            const txt = "✅ <b>ทดสอบระบบแจ้งเตือน Telegram สำเร็จ!</b>\nระบบ Clinic Manager Pro เชื่อมต่อเรียบร้อยแล้ว";
+            const response = await fetch(`https://api.telegram.org/bot${payload.token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: payload.chatId, text: txt, parse_mode: 'HTML' }) });
+            if(response.ok) return { statusCode: 200, body: JSON.stringify({ success: true }) };
+            return { statusCode: 400, body: JSON.stringify({ success: false, message: 'ส่งไม่สำเร็จ กรุณาตรวจสอบ Token และ Chat ID' }) };
+        }
+
         if (action === 'manage_staff') {
-            // SECURITY CHECK: ห้ามแก้ไข/ลบ Owner ถ้ายูสเซอร์ไม่ใช่ Super Owner
             if (['edit', 'delete'].includes(payload.subAction)) {
                 const target = await sql`SELECT role FROM users WHERE id = ${payload.id}`;
                 if (target.length > 0 && ['Owner', 'Super Owner'].includes(target[0].role) && payload.currentUserRole !== 'Super Owner') {
                     return { statusCode: 403, body: JSON.stringify({ success: false, message: '🔒 ปฏิเสธการเข้าถึง: เฉพาะระดับ Super Owner เท่านั้นที่สามารถจัดการสิทธิ์ Owner ได้' }) };
                 }
             }
-            // SECURITY CHECK: ห้ามสร้างหรือเลื่อนขั้นใครเป็น Owner ถ้ายูสเซอร์ไม่ใช่ Super Owner
             if (['add', 'edit'].includes(payload.subAction)) {
                 if (['Owner', 'Super Owner'].includes(payload.role) && payload.currentUserRole !== 'Super Owner') {
                     return { statusCode: 403, body: JSON.stringify({ success: false, message: '🔒 ปฏิเสธการเข้าถึง: ไม่อนุญาตให้สร้างหรือเปลี่ยนตำแหน่งเป็น Owner' }) };
