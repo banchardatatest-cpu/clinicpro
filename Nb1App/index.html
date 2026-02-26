@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Clinic Manager Pro V5.3</title>
+    <title>Clinic Manager Pro V5.4</title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Prompt:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -27,6 +27,7 @@
         .login-box { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 40px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
         .login-input { width: 100%; padding: 14px; margin-bottom: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: #fff; text-align: center; font-size: 16px; }
         .login-btn { width: 100%; padding: 15px; border-radius: 12px; border: none; background: var(--primary); color: #fff; font-family: 'Prompt'; font-weight: 700; font-size: 16px; cursor: pointer; transition: 0.3s; }
+        .login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         
         /* Nav & Theming */
         .nav { background: var(--nav-bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
@@ -55,7 +56,8 @@
         .avatar-wrapper:hover .avatar { opacity: 0.7; }
         .avatar-upload-icon { position: absolute; bottom: -2px; right: -2px; background: var(--primary); color: #fff; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; }
 
-        .btn-sm { padding: 8px 12px; font-size: 13px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; }
+        .btn-sm { padding: 8px 12px; font-size: 13px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; transition: 0.2s; }
+        .btn-sm:disabled { opacity: 0.6; cursor: not-allowed; }
         .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
         .tbl th { text-align: left; padding: 10px; background: #f8f9fa; border-bottom: 2px solid var(--border); color: var(--text); }
         .tbl td { padding: 10px; border-bottom: 1px solid var(--border); }
@@ -288,7 +290,6 @@
             <div id="sum-shop-area" style="display:flex; gap:10px; margin-bottom:20px; flex-wrap: wrap;">
                 <div style="flex:1; background:#e3f2fd; padding:15px; border-radius:12px; text-align:center; min-width: 120px;"><div style="font-size:12px; color:#1565c0;">ยอดขายรวม (ที่อนุมัติ)</div><div style="font-size:20px; font-weight:700; color:#0d47a1;" id="sum-shop-sales">0</div></div>
                 <div style="flex:1; background:#e8f5e9; padding:15px; border-radius:12px; text-align:center; min-width: 120px;"><div style="font-size:12px; color:#2e7d32;">รับชำระจริง (หัก % บัตร)</div><div style="font-size:20px; font-weight:700; color:#1b5e20;" id="sum-shop-paid">0</div></div>
-                <!-- กล่องคอมร้าน จะโชว์เฉพาะ Manager, Admin, Owner ผ่าน JS -->
                 <div id="shop-comm-box" style="flex:1; background:#fff3e0; padding:15px; border-radius:12px; text-align:center; min-width: 120px; display:none;">
                     <div style="font-size:12px; color:#e65100;">ค่าคอมมิชชันร้าน (Manager)</div>
                     <div style="font-size:20px; font-weight:700; color:#bf360c;" id="sum-shop-comm">0</div>
@@ -459,12 +460,20 @@
             </div>
         </div>
 
-        <div class="sec" style="border-left: 4px solid var(--text); margin-top:15px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><div class="sec-label" style="margin:0;">👥 พนักงานและสิทธิ์การใช้งาน</div><button class="btn-sm" style="background:var(--primary); color:#fff;" onclick="openStaffModal()">+ เพิ่มพนักงานใหม่</button></div>
-            <table class="tbl mobile-card-table">
-                <thead><tr><th>ชื่อ</th><th style="text-align:right;">จัดการ</th></tr></thead>
-                <tbody id="staff-table"></tbody>
-            </table>
+        <div class="sec set-box" style="border-left: 4px solid var(--text); margin-top:15px;">
+            <div class="sec-label" style="cursor:pointer;" onclick="toggleSettingsSec('sec-staff')">
+                <span>👥 พนักงานและสิทธิ์การใช้งาน</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button class="btn-sm" style="background:var(--primary); color:#fff;" onclick="openStaffModal(); event.stopPropagation();">+ เพิ่มพนักงาน</button>
+                    <span class="action-icon" id="icon-sec-staff">🔽</span>
+                </div>
+            </div>
+            <div class="sec-content" id="sec-staff">
+                <table class="tbl mobile-card-table">
+                    <thead><tr><th>ชื่อ</th><th style="text-align:right;">จัดการ</th></tr></thead>
+                    <tbody id="staff-table"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -622,11 +631,7 @@
         if (['Owner', 'Admin'].includes(role)) { document.getElementById('finance-approval-section').style.display = 'block'; loadApprovals(); }
         if(['Sales', 'BT', 'Dr'].includes(role)) { const s = document.getElementById('f-sale'); s.value = currentUser.id; s.disabled = true; s.style.background = '#eee'; document.getElementById('sum-shop-area').style.display = 'none'; }
         
-        // คอมร้าน ซ่อนไม่ให้ Sales/BT/Dr/Front เห็น (เปิดให้ Owner,Admin,Manager)
-        if (['Owner', 'Admin', 'Manager'].includes(role)) {
-            const scBox = document.getElementById('shop-comm-box');
-            if (scBox) scBox.style.display = 'block';
-        }
+        if (['Owner', 'Admin', 'Manager'].includes(role)) { const scBox = document.getElementById('shop-comm-box'); if (scBox) scBox.style.display = 'block'; }
 
         addItemRow(); loadAppointments();
         setTimeout(restoreDraftFromLocal, 500);
@@ -706,17 +711,14 @@
     }
 
     function enableTgEdit(id) {
-        const el = document.getElementById(id);
-        el.type = 'text'; el.readOnly = false; el.style.background = '#fff'; el.focus();
+        const el = document.getElementById(id); el.type = 'text'; el.readOnly = false; el.style.background = '#fff'; el.focus();
     }
 
     async function testTelegram() {
-        const token = document.getElementById('set-tg-token').value;
-        const chatId = document.getElementById('set-tg-chatid').value;
+        const token = document.getElementById('set-tg-token').value; const chatId = document.getElementById('set-tg-chatid').value;
         if(!token || !chatId) return showToast('กรุณากรอก Token และ Chat ID ก่อนทดสอบ', true);
         const res = await apiCall('test_telegram', { token, chatId });
-        if(res.success) showToast('ส่งข้อความทดสอบสำเร็จ');
-        else showToast('การทดสอบล้มเหลว', true);
+        if(res.success) showToast('ส่งข้อความทดสอบสำเร็จ'); else showToast('การทดสอบล้มเหลว', true);
     }
 
     function switchApprovalTab(tab) {
@@ -734,20 +736,26 @@
             let html = '';
             res.list.forEach(p => {
                 let itemsList = '';
-                if(p.items && Array.isArray(p.items)) { p.items.forEach(i => { itemsList += `<div>- ${i.name} ${i.note ? '('+i.note+')' : ''} ${i.qty||1} ${i.unit||''} = ${(parseFloat(i.total)||0).toLocaleString()}฿</div>`; }); }
+                let parsedItems = typeof p.items === 'string' ? JSON.parse(p.items) : p.items;
+                if(parsedItems && Array.isArray(parsedItems)) { parsedItems.forEach(i => { itemsList += `<div>- ${i.name} ${i.note ? '('+i.note+')' : ''} ${i.qty||1} ${i.unit||''} = ${(parseFloat(i.total)||0).toLocaleString()}฿</div>`; }); }
                 let badge = `<span class="stat-badge pending">⏳ รออนุมัติ</span>`;
                 if(p.approval_status === 'Approved') badge = `<span class="stat-badge approved">✅ อนุมัติแล้ว</span>`;
                 if(p.approval_status === 'Rejected') badge = `<span class="stat-badge rejected">❌ ยกเลิกแล้ว</span>`;
-                const balance = parseFloat(p.total_price) - parseFloat(p.total_paid);
-                html += `<div class="approval-card ${currentApprovalTab === 'history' ? 'history' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px;"><div>${badge} <span style="font-size:12px; color:var(--text2); margin-left:5px;">#P-${p.id}</span></div><div style="font-size:12px; color:var(--text2);">📅 ${new Date(p.created_at).toLocaleString('th-TH')}</div></div><div class="frow" style="margin-bottom:10px;"><div class="fg"><div style="font-size:12px; color:var(--text2);">ลูกค้า</div><div style="font-weight:bold;">${p.first_name} ${p.last_name||''}</div><div style="font-size:12px;">📞 ${p.phone}</div></div><div class="fg"><div style="font-size:12px; color:var(--text2);">พนักงานขาย</div><div style="font-weight:bold; color:var(--primary);">${p.sale_name||'-'}</div></div></div><div style="background:#fafbfe; padding:10px; border-radius:8px; margin-bottom:10px; font-size:13px;"><div style="font-weight:bold; margin-bottom:5px;">รายการสั่งซื้อรวม ${parseFloat(p.total_price).toLocaleString()}฿:</div>${itemsList}<div style="margin-top:5px; border-top:1px solid #e2e6f0; padding-top:5px; display:flex; justify-content:space-between; align-items:center;"><span>ยอดชำระรอบนี้: <strong style="color:var(--success); font-size:16px;">${parseFloat(p.amount).toLocaleString()} ฿</strong> (${p.payment_method})</span><span style="font-size:12px; color:var(--danger);">ค้างชำระ: ${balance > 0 ? balance.toLocaleString() : 0} ฿</span></div></div>${currentApprovalTab === 'pending' ? `<div class="frow"><button class="btn-sm" style="flex:1; background:var(--success); color:#fff; padding:12px; font-size:14px;" onclick="setApproval(${p.id}, ${p.order_id}, 'Approved')">✅ อนุมัติ</button><button class="btn-sm" style="flex:1; background:var(--danger); color:#fff; padding:12px; font-size:14px;" onclick="setApproval(${p.id}, ${p.order_id}, 'Rejected')">❌ ยกเลิก (Refund)</button></div>` : `<div style="text-align:right;">${p.approval_status === 'Approved' ? `<button class="btn-sm" style="background:#ffebee; color:#c62828;" onclick="if(confirm('ต้องการยกเลิกการอนุมัตินี้ย้อนหลังหรือไม่? (ยอดคอมมิชชันจะถูกหักลบอัตโนมัติ)')) setApproval(${p.id}, ${p.order_id}, 'Rejected')">ย้อนกลับไปยกเลิกยอดนี้</button>` : ''}</div>`}</div>`;
+                
+                let balance = parseFloat(p.total_price) - parseFloat(p.total_paid);
+                if (p.approval_status === 'Pending') balance = balance - parseFloat(p.amount);
+
+                html += `<div class="approval-card ${currentApprovalTab === 'history' ? 'history' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px; flex-wrap: wrap; gap: 8px;"><div>${badge} <span style="font-size:12px; color:var(--text2); margin-left:5px;">#P-${p.id}</span></div><div style="font-size:12px; color:var(--text2);">📅 ${new Date(p.created_at).toLocaleString('th-TH')}</div></div><div class="frow" style="margin-bottom:10px;"><div class="fg"><div style="font-size:12px; color:var(--text2);">ลูกค้า</div><div style="font-weight:bold; font-size:15px;">${p.first_name} ${p.last_name||''}</div><div style="font-size:12px;">📞 ${p.phone}</div></div><div class="fg"><div style="font-size:12px; color:var(--text2);">พนักงานขาย</div><div style="font-weight:bold; color:var(--primary);">${p.sale_name||'-'}</div></div></div><div style="background:#fafbfe; padding:10px; border-radius:8px; margin-bottom:10px; font-size:13px;"><div style="font-weight:bold; margin-bottom:5px;">รายการสั่งซื้อรวม ${parseFloat(p.total_price).toLocaleString()}฿:</div>${itemsList}<div style="margin-top:8px; border-top:1px solid #e2e6f0; padding-top:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 8px;"><span>ยอดชำระรอบนี้: <strong style="color:var(--success); font-size:16px;">${parseFloat(p.amount).toLocaleString()} ฿</strong> (${p.payment_method})</span><span style="font-size:12px; color:var(--danger); font-weight:bold;">ยอดค้างชำระ: ${balance > 0 ? balance.toLocaleString() : 0} ฿</span></div></div>${currentApprovalTab === 'pending' ? `<div class="frow"><button class="btn-sm" id="btn-appr-${p.id}" style="flex:1; background:var(--success); color:#fff; padding:12px; font-size:14px;" onclick="setApproval(${p.id}, ${p.order_id}, 'Approved', this)">✅ อนุมัติ</button><button class="btn-sm" id="btn-rej-${p.id}" style="flex:1; background:var(--danger); color:#fff; padding:12px; font-size:14px;" onclick="setApproval(${p.id}, ${p.order_id}, 'Rejected', this)">❌ ยกเลิก (Refund)</button></div>` : `<div style="text-align:right;">${p.approval_status === 'Approved' ? `<button class="btn-sm" style="background:#ffebee; color:#c62828;" onclick="if(confirm('ต้องการยกเลิกการอนุมัตินี้ย้อนหลังหรือไม่? (ยอดคอมมิชชันจะถูกหักลบอัตโนมัติ)')) setApproval(${p.id}, ${p.order_id}, 'Rejected', this)">ย้อนกลับไปยกเลิกยอดนี้</button>` : ''}${p.approval_status === 'Rejected' ? `<button class="btn-sm" style="background:#e8f5e9; color:#2e7d32;" onclick="if(confirm('ต้องการดึงยอดที่ยกเลิกไปแล้ว กลับมาเป็นอนุมัติอีกครั้งหรือไม่?')) setApproval(${p.id}, ${p.order_id}, 'Approved', this)">ดึงกลับมาเป็นอนุมัติ</button>` : ''}</div>`}</div>`;
             });
             container.innerHTML = html;
         }
     }
 
-    async function setApproval(paymentId, orderId, status) {
+    async function setApproval(paymentId, orderId, status, btnEl) {
+        if(btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ กำลังดำเนินการ...'; }
         const res = await apiCall('set_approval', { paymentId, orderId, status });
-        if(res.success) { showToast('อัปเดตสถานะสำเร็จ'); loadApprovals(); loadSummary(); }
+        if(res.success) { showToast('อัปเดตสถานะการเงินสำเร็จ'); loadApprovals(); loadSummary(); }
+        else { showToast('เกิดข้อผิดพลาดในการอัปเดตสถานะ', true); if(btnEl) { btnEl.disabled = false; btnEl.textContent = 'ลองใหม่'; } }
     }
 
     async function reloadCatalogData() {
@@ -815,8 +823,7 @@
         const res = await apiCall('save_order', payload);
         if (res.success) { 
             if(typeof confetti !== 'undefined') confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }}); 
-            playSound('sale'); 
-            showToast(systemSettings.success_msg || '🎉 บันทึกสำเร็จรอการอนุมัติ!'); 
+            playSound('sale'); showToast(systemSettings.success_msg || '🎉 บันทึกสำเร็จรอการอนุมัติ!'); 
             
             isFormDirty = false; if(currentUser) localStorage.removeItem('cmp_draft_' + currentUser.id);
             setTimeout(() => {
@@ -832,14 +839,8 @@
     async function loadSummary() {
         const res = await apiCall('get_sales_summary', { startDate: document.getElementById('sum-start').value, endDate: document.getElementById('sum-end').value });
         if(res.success) {
-            document.getElementById('sum-shop-sales').textContent = res.shopSummary.totalSales.toLocaleString(); 
-            document.getElementById('sum-shop-paid').textContent = res.shopSummary.totalCollected.toLocaleString();
-            
-            const shopCommBox = document.getElementById('sum-shop-comm');
-            if(shopCommBox) {
-                shopCommBox.textContent = `${parseFloat(res.shopSummary.shopCommission).toLocaleString()} ฿ (${res.shopSummary.shopCommPct}%)`;
-            }
-
+            document.getElementById('sum-shop-sales').textContent = res.shopSummary.totalSales.toLocaleString(); document.getElementById('sum-shop-paid').textContent = res.shopSummary.totalCollected.toLocaleString();
+            const shopCommBox = document.getElementById('sum-shop-comm'); if(shopCommBox) { shopCommBox.textContent = `${parseFloat(res.shopSummary.shopCommission).toLocaleString()} ฿ (${res.shopSummary.shopCommPct}%)`; }
             document.getElementById('sum-table').innerHTML = res.staffPerf.map(s => `<tr><td data-label="พนักงาน"><div style="font-weight:700;">${s.name}</div></td><td data-label="ยอดขาย(เต็ม)" style="text-align:right;">${parseFloat(s.total_sales).toLocaleString()}</td><td data-label="ยอดขาย(ฐานคิดคอม)" style="text-align:right;"><div style="font-weight:700; color:var(--primary);">${parseFloat(s.net_collected).toLocaleString()} ฿</div><div style="font-size:10px; color:var(--text2);">(ชำระ ${parseFloat(s.total_collected).toLocaleString()} - ทุน ${parseFloat(s.total_cost).toLocaleString()})</div></td><td data-label="คอมมิชชัน/ค่ามือ" style="text-align:right; color:var(--primary); font-weight:700;">${parseFloat(s.commission_amount).toLocaleString()} <span style="font-size:10px;">(${s.commission_percent}%)</span><br><span style="font-size:11px; color:#f57c00;">ค่ามือ: ${parseFloat(s.bt_fee_total||0).toLocaleString()} ฿</span></td></tr>`).join('');
         }
     }
