@@ -75,7 +75,7 @@ exports.handler = async (event) => {
         }
 
         // ==========================================
-        // 3. ORDERS & PAYMENTS
+        // 3. ORDERS & PAYMENTS (Telegram + Image Send)
         // ==========================================
         if (action === 'save_order') {
             let customerId;
@@ -109,6 +109,7 @@ exports.handler = async (event) => {
 
             await logAudit('SAVE_ORDER', 'orders', targetOrderId, { totalPrice: payload.totalPrice, paymentAmount: payload.paymentAmount });
 
+            // Telegram Alert Logic (อัปเกรดส่งรูปภาพ)
             try {
                 const settings = await sql`SELECT * FROM system_settings LIMIT 1`;
                 if (settings.length > 0 && settings[0].tg_token && settings[0].tg_config) {
@@ -116,6 +117,20 @@ exports.handler = async (event) => {
                     let itemsTxt = '';
                     if (payload.items && payload.items.length > 0) { payload.items.forEach(i => { itemsTxt += `- ${i.name} ${i.qty||1} ${i.unit||''} = ${(parseFloat(i.total)||0).toLocaleString()}฿\n`; }); }
                     const balance = parseFloat(payload.totalPrice) - parseFloat(payload.paymentAmount);
+
+                    // ฟังก์ชันสำหรับยิง Telegram API (รองรับรูปภาพ)
+                    const sendToTelegram = async (textMessage) => {
+                        let tgUrl = `https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`;
+                        let tgBody = { chat_id: settings[0].tg_chat_id, text: textMessage, parse_mode: 'HTML' };
+                        
+                        // ถ้ามีการแนบรูปมาด้วย ให้เปลี่ยนไปใช้ sendPhoto
+                        if (payload.imageUrl && payload.imageUrl.startsWith('http')) {
+                            tgUrl = `https://api.telegram.org/bot${settings[0].tg_token}/sendPhoto`;
+                            tgBody = { chat_id: settings[0].tg_chat_id, photo: payload.imageUrl, caption: textMessage, parse_mode: 'HTML' };
+                        }
+                        
+                        await fetch(tgUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tgBody) });
+                    };
 
                     if (isNewOrder && tgConfig.events?.new_order) {
                         let txt = `🚨 <b>แจ้งทำรายการออเดอร์ใหม่ (รออนุมัติ)</b>\n`;
@@ -126,19 +141,21 @@ exports.handler = async (event) => {
                         if (tgConfig.fields?.amount) txt += `💰 ยอดชำระเข้า: ${parseFloat(payload.paymentAmount).toLocaleString()} ฿\n`;
                         if (tgConfig.fields?.balance) txt += `📉 ยอดค้าง: ${balance > 0 ? balance.toLocaleString() : 0} ฿\n`;
                         if (tgConfig.fields?.staff) txt += `👩‍💼 พนักงาน: ${payload.saleStaffName}\n`;
-                        await fetch(`https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
+                        await sendToTelegram(txt);
                     }
-                    if (!isNewOrder && payload.paymentAmount > 0 && tgConfig.events?.payment) {
+                    else if (!isNewOrder && payload.paymentAmount > 0 && tgConfig.events?.payment) {
                         let txt = `💸 <b>แจ้งรับชำระเงิน (บิลเก่า/รออนุมัติ)</b>\n`;
                         if (tgConfig.fields?.date) txt += `📅 วันที่: ${new Date().toLocaleDateString('th-TH')}\n`;
                         if (tgConfig.fields?.name) txt += `👤 ลูกค้า: ${payload.firstName} ${payload.lastName}\n`;
                         if (tgConfig.fields?.amount) txt += `💰 ยอดชำระเข้า: ${parseFloat(payload.paymentAmount).toLocaleString()} ฿\n`;
                         if (tgConfig.fields?.staff) txt += `👩‍💼 พนักงานรับชำระ: ${payload.saleStaffName}\n`;
-                        await fetch(`https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
+                        await sendToTelegram(txt);
                     }
+
                     if (payload.usageDetails && !isNewOrder && tgConfig.events?.usage) {
                         let txt = `💆‍♀️ <b>บันทึกการเข้าใช้บริการ</b>\n👤 ลูกค้า: ${payload.firstName}\n📝 ทำรายการ: ${payload.usageDetails}`;
-                        await fetch(`https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
+                        let tgUrl = `https://api.telegram.org/bot${settings[0].tg_token}/sendMessage`;
+                        await fetch(tgUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: settings[0].tg_chat_id, text: txt, parse_mode: 'HTML' }) });
                     }
                 }
             } catch (e) { console.log('TG Error', e); }
@@ -167,7 +184,7 @@ exports.handler = async (event) => {
         }
 
         // ==========================================
-        // 5. SUMMARY & COMMISSION (Advanced Math)
+        // 5. SUMMARY & COMMISSION
         // ==========================================
         if (action === 'get_sales_summary') {
             const startDate = `${payload.startDate} 00:00:00`; 
@@ -184,51 +201,32 @@ exports.handler = async (event) => {
             const tiers = await sql`SELECT * FROM commission_tiers ORDER BY min_sales ASC`;
             const staffList = await sql`SELECT id, display_name FROM users`;
 
-            let staffPerfMap = {};
-            let shopTotalSales = 0; let shopTotalCollected = 0; let shopTotalNet = 0;
-            let orderCostPctMap = {};
+            let staffPerfMap = {}; let shopTotalSales = 0; let shopTotalCollected = 0; let shopTotalNet = 0; let orderCostPctMap = {};
 
-            // 1. คำนวณยอดขายรวมของออเดอร์ และหา % ต้นทุนเฉลี่ยของบิลนั้น (Proportional Cost)
             orders.forEach(o => {
                 const staffId = o.sale_staff_id;
                 if (!staffPerfMap[staffId]) staffPerfMap[staffId] = { id: staffId, name: staffList.find(s=>s.id===staffId)?.display_name || 'ไม่ระบุ', total_sales: 0, total_collected: 0, total_cost: 0, bt_fee_total: 0, order_count: 0 };
-                
-                let orderCost = 0;
-                let tPrice = parseFloat(o.total_price) || 1; // ป้องกันส่วนเป็น 0
-                if (o.items && Array.isArray(o.items)) { 
-                    o.items.forEach(item => { orderCost += ((parseFloat(item.total) || 0) * (parseFloat(item.deduct_percent) || 0) / 100); }); 
-                }
-                
-                // หาว่าบิลนี้หักกี่เปอร์เซ็นต์ของยอดเต็ม เพื่อนำไปหักลบกับยอด Payment อย่างยุติธรรม
+                let orderCost = 0; let tPrice = parseFloat(o.total_price) || 1;
+                if (o.items && Array.isArray(o.items)) { o.items.forEach(item => { orderCost += ((parseFloat(item.total) || 0) * (parseFloat(item.deduct_percent) || 0) / 100); }); }
                 orderCostPctMap[o.id] = (orderCost / tPrice);
-                
                 staffPerfMap[staffId].total_sales += parseFloat(o.total_price);
                 staffPerfMap[staffId].order_count += 1;
                 shopTotalSales += parseFloat(o.total_price);
             });
 
-            // 2. คำนวณยอดชำระเข้า (รับจริง) และหักต้นทุนสินค้า/บัตร (Net Sales Calculation)
             payments.forEach(p => {
                 const order = orders.find(o => o.id === p.order_id);
                 if (order) {
-                    let amount = parseFloat(p.amount);
-                    let ccFee = 0;
-                    if (p.payment_method === 'บัตรเครดิต') {
-                        ccFee = amount * (ccFeePercent / 100);
-                        amount = amount - ccFee;
-                    }
-                    
-                    // หักต้นทุนสินค้าตามสัดส่วนที่จ่ายมา
+                    let amount = parseFloat(p.amount); let ccFee = 0;
+                    if (p.payment_method === 'บัตรเครดิต') { ccFee = amount * (ccFeePercent / 100); amount = amount - ccFee; }
                     let costPct = orderCostPctMap[p.order_id] || 0;
                     let costDeduction = parseFloat(p.amount) * costPct;
-
                     staffPerfMap[order.sale_staff_id].total_collected += amount;
                     staffPerfMap[order.sale_staff_id].total_cost += costDeduction;
                     shopTotalCollected += amount;
                 }
             });
 
-            // 3. หักลบยอดยกเลิกย้อนหลัง (Retroactive Deductions)
             deductions.forEach(d => {
                 if (!staffPerfMap[d.sale_staff_id]) staffPerfMap[d.sale_staff_id] = { id: d.sale_staff_id, name: staffList.find(s=>s.id===d.sale_staff_id)?.display_name || 'ไม่ระบุ', total_sales: 0, total_collected: 0, total_cost: 0, bt_fee_total: 0, order_count: 0 };
                 let amt = parseFloat(d.amount);
@@ -237,7 +235,6 @@ exports.handler = async (event) => {
                 shopTotalCollected -= amt;
             });
 
-            // 4. คำนวณค่ามือ BT
             usages.forEach(u => {
                 if (u.bt_id) {
                     if (!staffPerfMap[u.bt_id]) staffPerfMap[u.bt_id] = { id: u.bt_id, name: staffList.find(s=>s.id===u.bt_id)?.display_name || 'ไม่ระบุ', total_sales: 0, total_collected: 0, total_cost: 0, bt_fee_total: 0, order_count: 0 };
@@ -247,35 +244,19 @@ exports.handler = async (event) => {
                 }
             });
 
-            // 5. สรุปเป็นตารางเซลล์แต่ละคน
             let staffPerfArray = Object.values(staffPerfMap).map(sp => {
-                let netCollected = sp.total_collected - sp.total_cost; // (ยอดรับชำระ - %บัตร - %ต้นทุน)
+                let netCollected = sp.total_collected - sp.total_cost; 
                 if (netCollected < 0) netCollected = 0;
-                
-                shopTotalNet += netCollected; // รวมยอดขายสุทธิทั้งหมดเพื่อคิดคอมร้าน
-                
+                shopTotalNet += netCollected;
                 let matchedTier = tiers[0] || { commission_percent: 0 };
                 for (let i = 0; i < tiers.length; i++) { if (sp.total_sales >= parseFloat(tiers[i].min_sales) && (!tiers[i].max_sales || sp.total_sales <= parseFloat(tiers[i].max_sales))) matchedTier = tiers[i]; }
                 return { ...sp, net_collected: netCollected, commission_percent: parseFloat(matchedTier.commission_percent), commission_amount: netCollected * (parseFloat(matchedTier.commission_percent) / 100) };
             });
 
-            if (['Sales', 'BT', 'Dr'].includes(payload.currentUserRole)) {
-                staffPerfArray = staffPerfArray.filter(sp => sp.id === payload.currentUserId);
-            }
-
+            if (['Sales', 'BT', 'Dr'].includes(payload.currentUserRole)) { staffPerfArray = staffPerfArray.filter(sp => sp.id === payload.currentUserId); }
             staffPerfArray.sort((a, b) => b.total_sales - a.total_sales);
             
-            // ส่ง Shop Commission สรุปกลับไป
-            return { statusCode: 200, body: JSON.stringify({ 
-                success: true, 
-                staffPerf: staffPerfArray, 
-                shopSummary: { 
-                    totalSales: shopTotalSales, 
-                    totalCollected: shopTotalCollected, 
-                    shopCommission: shopTotalNet * (shopCommPct / 100),
-                    shopCommPct: shopCommPct
-                } 
-            })};
+            return { statusCode: 200, body: JSON.stringify({ success: true, staffPerf: staffPerfArray, shopSummary: { totalSales: shopTotalSales, totalCollected: shopTotalCollected, shopCommission: shopTotalNet * (shopCommPct / 100), shopCommPct: shopCommPct } })};
         }
 
         // ==========================================
@@ -287,13 +268,9 @@ exports.handler = async (event) => {
         }
 
         if (action === 'search_customers') {
-            const q = payload.query || '';
-            let customers = [];
-            if (['Sales', 'BT', 'Dr'].includes(payload.currentUserRole)) {
-                customers = await sql`SELECT DISTINCT c.* FROM customers c LEFT JOIN orders o ON c.id = o.customer_id LEFT JOIN service_usage su ON c.id = su.customer_id WHERE (c.first_name ILIKE ${'%'+q+'%'} OR c.last_name ILIKE ${'%'+q+'%'} OR c.phone ILIKE ${'%'+q+'%'}) AND (o.sale_staff_id = ${payload.currentUserId} OR su.dr_id = ${payload.currentUserId} OR su.bt_id = ${payload.currentUserId}) ORDER BY c.first_name ASC LIMIT 50`;
-            } else {
-                customers = await sql`SELECT * FROM customers WHERE first_name ILIKE ${'%'+q+'%'} OR last_name ILIKE ${'%'+q+'%'} OR phone ILIKE ${'%'+q+'%'} ORDER BY first_name ASC LIMIT 50`;
-            }
+            const q = payload.query || ''; let customers = [];
+            if (['Sales', 'BT', 'Dr'].includes(payload.currentUserRole)) { customers = await sql`SELECT DISTINCT c.* FROM customers c LEFT JOIN orders o ON c.id = o.customer_id LEFT JOIN service_usage su ON c.id = su.customer_id WHERE (c.first_name ILIKE ${'%'+q+'%'} OR c.last_name ILIKE ${'%'+q+'%'} OR c.phone ILIKE ${'%'+q+'%'}) AND (o.sale_staff_id = ${payload.currentUserId} OR su.dr_id = ${payload.currentUserId} OR su.bt_id = ${payload.currentUserId}) ORDER BY c.first_name ASC LIMIT 50`; } 
+            else { customers = await sql`SELECT * FROM customers WHERE first_name ILIKE ${'%'+q+'%'} OR last_name ILIKE ${'%'+q+'%'} OR phone ILIKE ${'%'+q+'%'} ORDER BY first_name ASC LIMIT 50`; }
             return { statusCode: 200, body: JSON.stringify({ success: true, customers }) };
         }
 
@@ -316,13 +293,7 @@ exports.handler = async (event) => {
         }
         if (action === 'save_settings') {
             const tgJson = JSON.stringify(payload.tg_config);
-            await sql`UPDATE system_settings SET 
-                clinic_name=${payload.clinic_name}, ui_primary_color=${payload.ui_primary_color}, 
-                ui_bg_color=${payload.ui_bg_color}, ui_nav_bg=${payload.ui_nav_bg}, ui_nav_text=${payload.ui_nav_text}, ui_board_text=${payload.ui_board_text},
-                contact_info=${payload.contact_info}, logo_url=${payload.logo_url}, cc_fee_percent=${payload.cc_fee_percent},
-                tg_token=${payload.tg_token}, tg_chat_id=${payload.tg_chat_id}, tg_config=${tgJson}::jsonb,
-                enable_sound=${payload.enable_sound}, success_msg=${payload.success_msg}, shop_commission_percent=${payload.shop_commission_percent}
-            `;
+            await sql`UPDATE system_settings SET clinic_name=${payload.clinic_name}, ui_primary_color=${payload.ui_primary_color}, ui_bg_color=${payload.ui_bg_color}, ui_nav_bg=${payload.ui_nav_bg}, ui_nav_text=${payload.ui_nav_text}, ui_board_text=${payload.ui_board_text}, contact_info=${payload.contact_info}, logo_url=${payload.logo_url}, cc_fee_percent=${payload.cc_fee_percent}, tg_token=${payload.tg_token}, tg_chat_id=${payload.tg_chat_id}, tg_config=${tgJson}::jsonb, enable_sound=${payload.enable_sound}, success_msg=${payload.success_msg}, shop_commission_percent=${payload.shop_commission_percent}`;
             await logAudit('UPDATE_SETTINGS', 'system_settings', null, { details: 'System settings updated' });
             return { statusCode: 200, body: JSON.stringify({ success: true }) };
         }
@@ -360,8 +331,9 @@ exports.handler = async (event) => {
             const drive = google.drive({ version: 'v3', auth });
             const base64Data = payload.base64.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
-            const res = await drive.files.create({ requestBody: { name: payload.fileName, parents: [process.env.GDRIVE_FOLDER_ID] }, media: { mimeType: 'image/jpeg', body: require('stream').Readable.from(buffer) }, fields: 'webViewLink' });
-            return { statusCode: 200, body: JSON.stringify({ success: true, link: res.data.webViewLink }) };
+            const res = await drive.files.create({ requestBody: { name: payload.fileName, parents: [process.env.GDRIVE_FOLDER_ID] }, media: { mimeType: 'image/jpeg', body: require('stream').Readable.from(buffer) }, fields: 'id' });
+            const directLink = `https://drive.google.com/uc?export=view&id=${res.data.id}`;
+            return { statusCode: 200, body: JSON.stringify({ success: true, link: directLink }) };
         }
 
         return { statusCode: 400, body: JSON.stringify({ success: false, message: 'Invalid action' }) };
