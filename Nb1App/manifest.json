@@ -1,24 +1,24 @@
 {
   "name": "Clinic Manager Pro",
   "short_name": "ClinicPro",
-  "description": "ระบบจัดการคลินิกความงามระดับโปร",
-  "start_url": "./index.html",
+  "description": "ระบบจัดการข้อมูลคลินิกและไฟแนนซ์เต็มรูปแบบ (Clinic Manager Pro)",
+  "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f4f6fb",
   "theme_color": "#4361ee",
-  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%234361ee' d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14H9v-3H6v-2h3V9h2v3h3v2h-3v3z'/></svg>",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%234361ee' d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14H9v-3H6v-2h3V9h2v3h3v2h-3v3z'/></svg>",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }
